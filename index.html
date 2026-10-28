@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR Form</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 16px; }
+    h2 { margin-top: 0; }
+    button { padding: 12px 18px; font-size: 16px; border: 0; border-radius: 8px;
+             background: #1a73e8; color: #fff; cursor: pointer; }
+    button:disabled { background: #999; }
+    #reader { width: 100%; margin: 12px 0; }
+    input[type="text"], textarea { width: 100%; font-size: 16px; padding: 10px;
+               box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px;
+               margin-top: 4px; margin-bottom: 14px; }
+    textarea { min-height: 80px; background: #f5f5f5; }
+    .required { color: #d93025; }
+    .options label { display: block; padding: 10px; border: 1px solid #ccc;
+                     border-radius: 8px; margin: 8px 0; font-size: 16px; }
+    #submitBtn { margin-top: 12px; }
+    #status { margin-top: 12px; font-weight: 600; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h2>QR Submission Form</h2>
+
+  <label for="name"><b>Your name <span class="required">*</span></b></label>
+  <input id="name" type="text" placeholder="Enter your full name" maxlength="100" autocomplete="name">
+
+  <button id="scanBtn">📷 Scan QR Code</button>
+  <div id="reader"></div>
+
+  <label for="project"><b>Project</b></label>
+  <textarea id="project" readonly placeholder="Scanned project will appear here..."></textarea>
+
+  <div class="options" id="options">
+    <label><input type="radio" name="opt" value="Long Term"> Long Term</label>
+    <label><input type="radio" name="opt" value="Short Term"> Short Term</label>
+  </div>
+
+  <button id="submitBtn" class="hidden">Submit</button>
+  <div id="status"></div>
+
+  <script>
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyz6UfU5_oFMzmPku1uyUAt8jV_mNuh-B-U6QYzuY-KrU3-wIbHlhBT7lmukSese_3x/exec';
+
+    const nameInput = document.getElementById('name');
+    const projectInput = document.getElementById('project');
+    const scanBtn = document.getElementById('scanBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusEl = document.getElementById('status');
+    let scanner = null;
+
+    // --- Helpers ---
+    function selectedOption() {
+      const r = document.querySelector('input[name="opt"]:checked');
+      return r ? r.value : null;
+    }
+
+    // Submit is visible only when name, project and option are all filled in
+    function updateSubmitVisibility() {
+      const ready = nameInput.value.trim().length >= 2
+                 && projectInput.value.trim()
+                 && selectedOption();
+      submitBtn.classList.toggle('hidden', !ready);
+    }
+
+    // If the QR holds a form link like ...?project=Alpha, pull out just "Alpha"
+    function extractProject(raw) {
+      try {
+        const u = new URL(raw);
+        const p = u.searchParams.get('project') || u.searchParams.get('text');
+        if (p) return p;
+      } catch (e) { /* not a URL, use the text as is */ }
+      return raw;
+    }
+
+    nameInput.addEventListener('input', updateSubmitVisibility);
+    document.querySelectorAll('input[name="opt"]')
+      .forEach(r => r.addEventListener('change', updateSubmitVisibility));
+
+    // --- Pre-fill Project from the link, e.g. ?project=Alpha (old ?text=Alpha also works) ---
+    const params = new URLSearchParams(window.location.search);
+    const prefill = params.get('project') || params.get('text');
+    if (prefill) projectInput.value = prefill.trim();
+    updateSubmitVisibility();
+
+    // --- Scanning ---
+    scanBtn.addEventListener('click', async () => {
+      statusEl.textContent = '';
+      scanner = new Html5Qrcode('reader');
+      try {
+        await scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          async (decodedText) => {
+            projectInput.value = extractProject(decodedText).trim();
+            try { await scanner.stop(); scanner.clear(); } catch (e) {}
+            updateSubmitVisibility();
+          }
+        );
+      } catch (err) {
+        statusEl.textContent = 'Camera error: ' + err;
+      }
+    });
+
+    // --- Submit ---
+    submitBtn.addEventListener('click', async () => {
+      const name = nameInput.value.trim();
+      if (name.length < 2) {
+        statusEl.textContent = '❌ Please enter your name.';
+        nameInput.focus();
+        return;
+      }
+
+      submitBtn.disabled = true;
+      statusEl.textContent = 'Submitting...';
+      try {
+        const res = await fetch(WEB_APP_URL, {
+          method: 'POST',
+          // text/plain avoids a CORS preflight, which Apps Script can't answer
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            name: name,
+            project: projectInput.value,
+            option: selectedOption()
+          })
+        });
+        const result = await res.json();
+        if (!result.ok) throw new Error(result.error);
+
+        statusEl.textContent = '✅ Submitted successfully!';
+        projectInput.value = '';
+        document.querySelectorAll('input[name="opt"]').forEach(r => r.checked = false);
+        submitBtn.classList.add('hidden');
+        // Remove ?project=... from the address so a refresh doesn't refill it
+        history.replaceState(null, '', window.location.pathname);
+      } catch (err) {
+        statusEl.textContent = '❌ Failed: ' + err.message;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
