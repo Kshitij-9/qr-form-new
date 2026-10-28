@@ -1,145 +1,301 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>QR Form</title>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 16px; }
-    h2 { margin-top: 0; }
-    button { padding: 12px 18px; font-size: 16px; border: 0; border-radius: 8px;
-             background: #1a73e8; color: #fff; cursor: pointer; }
-    button:disabled { background: #999; }
-    #reader { width: 100%; margin: 12px 0; }
-    input[type="text"], textarea { width: 100%; font-size: 16px; padding: 10px;
-               box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px;
-               margin-top: 4px; margin-bottom: 14px; }
-    textarea { min-height: 80px; background: #f5f5f5; }
-    .required { color: #d93025; }
-    .options label { display: block; padding: 10px; border: 1px solid #ccc;
-                     border-radius: 8px; margin: 8px 0; font-size: 16px; }
-    #submitBtn { margin-top: 12px; }
-    #status { margin-top: 12px; font-weight: 600; }
-    .hidden { display: none; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>Project submission</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f7; --card: #ffffff; --fill: #f2f2f4; --text: #1d1d1f; --muted: #6e6e73;
+    --line: rgba(0,0,0,.08); --accent: #0071e3; --accent-press: #0062c4;
+    --ok: #1d9a4b; --err: #d70015; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 40px rgba(0,0,0,.06);
+    --ease: cubic-bezier(.32,.72,0,1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000; --card: #161618; --fill: #232326; --text: #f5f5f7; --muted: #98989d;
+      --line: rgba(255,255,255,.1); --accent: #2997ff; --accent-press: #0a84ff;
+      --ok: #30d158; --err: #ff453a; --shadow: 0 0 0 1px rgba(255,255,255,.06);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { background: var(--bg); }
+  body {
+    margin: 0; min-height: 100vh; min-height: 100dvh; color: var(--text); background: var(--bg);
+    font-family: "Figtree", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    font-size: 16px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+    display: flex; align-items: center; justify-content: center;
+    padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+  }
+  .card {
+    width: 100%; max-width: 440px; background: var(--card); border-radius: 28px;
+    padding: 32px 24px 24px; box-shadow: var(--shadow);
+    animation: arrive .9s var(--ease) both;
+  }
+  @keyframes arrive { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: none; } }
+
+  h1 { margin: 0 0 6px; font-size: clamp(28px, 8vw, 34px); line-height: 1.1; font-weight: 700; letter-spacing: -.025em; }
+  .sub { margin: 0 0 28px; color: var(--muted); font-size: 17px; max-width: 34ch; }
+
+  .field { margin-bottom: 20px; }
+  .field > label, .group-label { display: block; margin: 0 0 8px 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  input[type="text"], textarea {
+    width: 100%; border: 0; outline: 0; background: var(--fill); color: var(--text);
+    font: inherit; font-size: 17px; padding: 15px 16px; border-radius: 14px;
+    transition: box-shadow .25s var(--ease), background .25s;
+  }
+  input[type="text"]:focus { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent); }
+  ::placeholder { color: var(--muted); opacity: .75; }
+  textarea { resize: none; min-height: 56px; margin-top: 10px; cursor: default; }
+  textarea.flash { animation: flash 1.1s var(--ease); }
+  @keyframes flash { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+
+  /* Viewfinder */
+  .finder { position: relative; height: 128px; border-radius: 20px; background: var(--fill); overflow: hidden;
+            transition: height .6s var(--ease); }
+  .finder.scanning { height: min(80vw, 330px); background: #000; }
+  #reader { position: absolute; inset: 0; opacity: 0; transition: opacity .5s; border: 0 !important; }
+  .scanning #reader { opacity: 1; }
+  #reader video { width: 100% !important; height: 100% !important; object-fit: cover; }
+  .finder-idle {
+    position: absolute; inset: 0; width: 100%; border: 0; background: transparent; color: var(--text);
+    font: inherit; font-size: 16px; font-weight: 600; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    transition: opacity .3s, transform .2s var(--ease);
+  }
+  .finder-idle:active { transform: scale(.97); }
+  .finder-idle svg { width: 26px; height: 26px; color: var(--accent); }
+  .scanning .finder-idle { opacity: 0; pointer-events: none; }
+  .corners span { position: absolute; width: 24px; height: 24px; border: 0 solid var(--accent); pointer-events: none;
+                  transition: inset .6s var(--ease), border-color .3s; }
+  .corners .tl { top: 16px; left: 16px; border-top-width: 3px; border-left-width: 3px; border-top-left-radius: 9px; }
+  .corners .tr { top: 16px; right: 16px; border-top-width: 3px; border-right-width: 3px; border-top-right-radius: 9px; }
+  .corners .bl { bottom: 16px; left: 16px; border-bottom-width: 3px; border-left-width: 3px; border-bottom-left-radius: 9px; }
+  .corners .br { bottom: 16px; right: 16px; border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: 9px; }
+  .finder:hover:not(.scanning) .tl { top: 12px; left: 12px; } .finder:hover:not(.scanning) .tr { top: 12px; right: 12px; }
+  .finder:hover:not(.scanning) .bl { bottom: 12px; left: 12px; } .finder:hover:not(.scanning) .br { bottom: 12px; right: 12px; }
+  .scanning .corners span { border-color: #fff; }
+  .stop {
+    position: absolute; left: 50%; bottom: 18px; transform: translate(-50%, 10px); opacity: 0; pointer-events: none;
+    border: 0; border-radius: 99px; padding: 10px 20px; font: inherit; font-size: 15px; font-weight: 600; color: #fff;
+    background: rgba(60,60,67,.6); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); cursor: pointer;
+    transition: opacity .4s .2s, transform .5s .2s var(--ease); z-index: 2;
+  }
+  .scanning .stop { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+
+  /* Segmented control */
+  .segmented { position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 14px; background: var(--fill); }
+  .segmented input { position: absolute; opacity: 0; pointer-events: none; }
+  .segmented label { position: relative; z-index: 1; text-align: center; padding: 11px 8px; font-size: 16px; font-weight: 600;
+                     color: var(--muted); border-radius: 11px; cursor: pointer; transition: color .3s; user-select: none; }
+  .thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 11px; background: var(--card);
+           box-shadow: 0 1px 3px rgba(0,0,0,.15); opacity: 0; transition: transform .45s var(--ease), opacity .25s; }
+  .segmented input:checked ~ .thumb { opacity: 1; }
+  #opt1:checked ~ .thumb { transform: translateX(0); }
+  #opt2:checked ~ .thumb { transform: translateX(100%); }
+  #opt1:checked ~ label[for="opt1"], #opt2:checked ~ label[for="opt2"] { color: var(--text); }
+  .segmented:has(input:focus-visible) { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent); }
+
+  /* Hint + submit */
+  .hint { margin: 16px 4px 0; font-size: 14px; color: var(--muted); min-height: 21px; transition: opacity .3s; }
+  .hint.gone { opacity: 0; }
+  .reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .55s var(--ease), opacity .4s; }
+  .reveal.show { grid-template-rows: 1fr; opacity: 1; }
+  .reveal > div { overflow: hidden; min-height: 0; }
+  #submitBtn {
+    width: 100%; height: 54px; margin-top: 16px; border: 0; border-radius: 15px; background: var(--accent); color: #fff;
+    font: inherit; font-size: 17px; font-weight: 600; cursor: pointer;
+    transition: transform .2s var(--ease), background .2s, opacity .2s;
+  }
+  #submitBtn:hover { background: var(--accent-press); }
+  #submitBtn:active { transform: scale(.98); }
+  #submitBtn:disabled { opacity: .55; cursor: default; }
+
+  /* Status */
+  #status { display: flex; align-items: center; gap: 10px; margin: 0 4px; max-height: 0; opacity: 0; overflow: hidden;
+            font-size: 15px; font-weight: 500; transition: max-height .5s var(--ease), opacity .4s, margin .5s var(--ease); }
+  #status.on { max-height: 80px; opacity: 1; margin-top: 18px; }
+  #status svg { flex: none; width: 22px; height: 22px; display: none; }
+  #status.ok { color: var(--ok); } #status.err { color: var(--err); }
+  #status.ok .i-ok, #status.err .i-err, #status.busy .i-busy { display: block; }
+  .i-ok path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw .6s .1s var(--ease) forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .i-busy { animation: spin .9s linear infinite; color: var(--muted); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #status.busy { color: var(--muted); }
+
+  :focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; }
+  input:focus-visible { outline: 0; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
 </head>
 <body>
-  <h2>QR Submission Form</h2>
+  <main class="card">
+    <h1>Project submission</h1>
+    <p class="sub">Scan a project’s QR code, choose a term, and send it in.</p>
 
-  <label for="name"><b>Your name <span class="required">*</span></b></label>
-  <input id="name" type="text" placeholder="Enter your full name" maxlength="100" autocomplete="name">
+    <div class="field">
+      <label for="name">Name</label>
+      <input id="name" type="text" placeholder="Full name" maxlength="100" autocomplete="name" enterkeyhint="done">
+    </div>
 
-  <button id="scanBtn">📷 Scan QR Code</button>
-  <div id="reader"></div>
+    <div class="field">
+      <span class="group-label">Project</span>
+      <div class="finder" id="finder">
+        <div id="reader"></div>
+        <button type="button" class="finder-idle" id="scanBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M8 12h8"/></svg>
+          <span id="scanLabel">Scan QR code</span>
+        </button>
+        <div class="corners" aria-hidden="true"><span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span></div>
+        <button type="button" class="stop" id="stopBtn">Cancel</button>
+      </div>
+      <textarea id="project" readonly rows="2" placeholder="Appears after you scan" aria-label="Scanned project"></textarea>
+    </div>
 
-  <label for="project"><b>Project</b></label>
-  <textarea id="project" readonly placeholder="Scanned project will appear here..."></textarea>
+    <div class="field" style="margin-bottom:0">
+      <span class="group-label" id="termLabel">Term</span>
+      <div class="segmented" role="radiogroup" aria-labelledby="termLabel">
+        <input type="radio" name="opt" id="opt1" value="Long Term">
+        <input type="radio" name="opt" id="opt2" value="Short Term">
+        <span class="thumb"></span>
+        <label for="opt1">Long Term</label>
+        <label for="opt2">Short Term</label>
+      </div>
+    </div>
 
-  <div class="options" id="options">
-    <label><input type="radio" name="opt" value="Long Term"> Long Term</label>
-    <label><input type="radio" name="opt" value="Short Term"> Short Term</label>
-  </div>
+    <p class="hint" id="hint" aria-live="polite"></p>
+    <div class="reveal" id="reveal" inert>
+      <div><button type="button" id="submitBtn">Submit</button></div>
+    </div>
 
-  <button id="submitBtn" class="hidden">Submit</button>
-  <div id="status"></div>
+    <div id="status" role="status" aria-live="polite">
+      <svg class="i-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" stroke-width="1.8"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>
+      <svg class="i-err" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10" stroke-width="1.8"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>
+      <svg class="i-busy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9" /></svg>
+      <span id="statusText"></span>
+    </div>
+  </main>
 
   <script>
     const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyz6UfU5_oFMzmPku1uyUAt8jV_mNuh-B-U6QYzuY-KrU3-wIbHlhBT7lmukSese_3x/exec';
 
-    const nameInput = document.getElementById('name');
-    const projectInput = document.getElementById('project');
-    const scanBtn = document.getElementById('scanBtn');
-    const submitBtn = document.getElementById('submitBtn');
-    const statusEl = document.getElementById('status');
-    let scanner = null;
+    const $ = id => document.getElementById(id);
+    const nameInput = $('name'), projectInput = $('project'), finder = $('finder');
+    const scanBtn = $('scanBtn'), stopBtn = $('stopBtn'), scanLabel = $('scanLabel');
+    const submitBtn = $('submitBtn'), reveal = $('reveal'), hint = $('hint');
+    const statusEl = $('status'), statusText = $('statusText');
+    let scanner = null, stopping = false;
 
-    // --- Helpers ---
     function selectedOption() {
       const r = document.querySelector('input[name="opt"]:checked');
       return r ? r.value : null;
     }
 
-    // Submit is visible only when name, project and option are all filled in
-    function updateSubmitVisibility() {
-      const ready = nameInput.value.trim().length >= 2
-                 && projectInput.value.trim()
-                 && selectedOption();
-      submitBtn.classList.toggle('hidden', !ready);
+    // Shows the next missing step, or reveals Submit when everything is filled in
+    function refresh() {
+      let msg = '';
+      if (nameInput.value.trim().length < 2) msg = 'Enter your name to continue.';
+      else if (!projectInput.value.trim()) msg = 'Scan a project QR code.';
+      else if (!selectedOption()) msg = 'Choose Long Term or Short Term.';
+      const ready = !msg;
+      reveal.classList.toggle('show', ready);
+      reveal.inert = !ready;
+      hint.textContent = msg;
+      hint.classList.toggle('gone', ready);
     }
 
-    // If the QR holds a form link like ...?project=Alpha, pull out just "Alpha"
+    function setStatus(type, text) {
+      statusEl.className = type ? 'on ' + type : '';
+      if (type) { statusText.textContent = text; }
+    }
+
+    function setProject(value) {
+      projectInput.value = value;
+      scanLabel.textContent = value ? 'Scan again' : 'Scan QR code';
+      projectInput.classList.remove('flash'); void projectInput.offsetWidth;
+      if (value) projectInput.classList.add('flash');
+      refresh();
+    }
+
+    // If the QR holds a form link like ...?project=Alpha, use just "Alpha"
     function extractProject(raw) {
       try {
         const u = new URL(raw);
         const p = u.searchParams.get('project') || u.searchParams.get('text');
         if (p) return p;
-      } catch (e) { /* not a URL, use the text as is */ }
+      } catch (e) { /* plain text, use as is */ }
       return raw;
     }
 
-    nameInput.addEventListener('input', updateSubmitVisibility);
-    document.querySelectorAll('input[name="opt"]')
-      .forEach(r => r.addEventListener('change', updateSubmitVisibility));
+    nameInput.addEventListener('input', refresh);
+    document.querySelectorAll('input[name="opt"]').forEach(r => r.addEventListener('change', refresh));
 
-    // --- Pre-fill Project from the link, e.g. ?project=Alpha (old ?text=Alpha also works) ---
+    // Pre-fill from link: ?project=Alpha (old ?text=Alpha also works)
     const params = new URLSearchParams(window.location.search);
     const prefill = params.get('project') || params.get('text');
-    if (prefill) projectInput.value = prefill.trim();
-    updateSubmitVisibility();
+    setProject(prefill ? prefill.trim() : '');
 
     // --- Scanning ---
+    async function stopScan() {
+      const s = scanner; scanner = null;
+      if (s) { try { await s.stop(); s.clear(); } catch (e) {} }
+      finder.classList.remove('scanning');
+    }
+
     scanBtn.addEventListener('click', async () => {
-      statusEl.textContent = '';
+      setStatus('');
+      finder.classList.add('scanning');
       scanner = new Html5Qrcode('reader');
       try {
         await scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          async (decodedText) => {
-            projectInput.value = extractProject(decodedText).trim();
-            try { await scanner.stop(); scanner.clear(); } catch (e) {}
-            updateSubmitVisibility();
+          { fps: 10, qrbox: { width: 220, height: 220 } },
+          (text) => {
+            if (stopping) return;
+            stopping = true;
+            setProject(extractProject(text).trim());
+            stopScan().finally(() => { stopping = false; });
           }
         );
       } catch (err) {
-        statusEl.textContent = 'Camera error: ' + err;
+        scanner = null;
+        finder.classList.remove('scanning');
+        setStatus('err', 'Camera unavailable. Allow camera access and try again.');
       }
     });
+    stopBtn.addEventListener('click', stopScan);
 
     // --- Submit ---
     submitBtn.addEventListener('click', async () => {
       const name = nameInput.value.trim();
-      if (name.length < 2) {
-        statusEl.textContent = '❌ Please enter your name.';
-        nameInput.focus();
-        return;
-      }
+      if (name.length < 2) { refresh(); nameInput.focus(); return; }
 
       submitBtn.disabled = true;
-      statusEl.textContent = 'Submitting...';
+      setStatus('busy', 'Submitting…');
       try {
         const res = await fetch(WEB_APP_URL, {
           method: 'POST',
           // text/plain avoids a CORS preflight, which Apps Script can't answer
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            name: name,
-            project: projectInput.value,
-            option: selectedOption()
-          })
+          body: JSON.stringify({ name: name, project: projectInput.value, option: selectedOption() })
         });
         const result = await res.json();
         if (!result.ok) throw new Error(result.error);
 
-        statusEl.textContent = '✅ Submitted successfully!';
-        projectInput.value = '';
+        setStatus('ok', 'Submitted. Thank you, ' + name + '.');
+        setProject('');
         document.querySelectorAll('input[name="opt"]').forEach(r => r.checked = false);
-        submitBtn.classList.add('hidden');
-        // Remove ?project=... from the address so a refresh doesn't refill it
+        refresh();
         history.replaceState(null, '', window.location.pathname);
       } catch (err) {
-        statusEl.textContent = '❌ Failed: ' + err.message;
+        setStatus('err', 'Couldn’t submit: ' + err.message);
       } finally {
         submitBtn.disabled = false;
       }
